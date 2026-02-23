@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage QR · with download</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+    <!-- QR library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #f5f7fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .card {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 32px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        }
+        h2 {
+            font-weight: 500;
+            font-size: 1.8rem;
+            color: #111827;
+            margin-bottom: 2rem;
+        }
+        .upload-area {
+            background: #f9fafb;
+            border: 2px dashed #d1d5db;
+            border-radius: 20px;
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 2rem;
+        }
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #f3f4f6;
+        }
+        .upload-icon {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+        }
+        #fileInput { display: none; }
+        .flex-row {
+            display: flex;
+            gap: 3rem;
+            justify-content: center;
+            align-items: center;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        .preview-container {
+            width: 250px;
+            height: 250px;
+            background: #f3f4f6;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .preview-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .qr-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        .qr-container {
+            width: 300px;
+            height: 300px;
+            background: white;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #e5e7eb;
+            padding: 10px;
+        }
+        #qrcode {
+            width: 280px;
+            height: 280px;
+        }
+        #qrcode canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .download-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .download-btn:hover {
+            background: #2563eb;
+        }
+        .download-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .hidden { display: none !important; }
+        .status {
+            text-align: center;
+            color: #4b5563;
+            margin: 1.5rem 0;
+            padding: 0.75rem;
+            background: #f3f4f6;
+            border-radius: 40px;
+            font-size: 1rem;
+        }
+        .link-button {
+            text-align: center;
+            margin: 1rem 0;
+        }
+        .link-button a {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            background: #eff6ff;
+            border-radius: 40px;
+            display: inline-block;
+        }
+        .footnote {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.8rem;
+            margin-top: 1.5rem;
+        }
+        .placeholder-text {
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+        .url-preview {
+            font-size: 0.7rem;
+            color: #6b7280;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📸 Storage · QR</h2>
+
+        <input type="file" id="fileInput" accept="image/*">
+
+        <div class="upload-area" id="uploadZone">
+            <div class="upload-icon">🖼️</div>
+            <p style="color: #374151;">click or drag image here</p>
+        </div>
+
+        <div class="flex-row">
+            <div class="preview-container">
+                <img id="preview" src="" alt="" class="hidden">
+                <span id="previewPlaceholder" class="placeholder-text">preview</span>
+            </div>
+            
+            <div class="qr-section">
+                <div class="qr-container">
+                    <div id="qrcode"></div>
+                    <span id="qrPlaceholder" class="placeholder-text">qr code will appear here</span>
+                </div>
+                <button id="downloadBtn" class="download-btn hidden" onclick="downloadQR()">
+                    ⬇️ Download QR Code
+                </button>
+                <div id="urlPreview" class="url-preview hidden"></div>
+            </div>
+        </div>
+
+        <div class="status" id="status">⬆️ upload an image</div>
+
+        <div id="viewerContainer" class="link-button hidden">
+            <a id="viewerLink" href="#" target="_blank">open full-screen image →</a>
+        </div>
+
+        <div class="footnote">
+            bucket: qrcode-e4bd1.firebasestorage.app
+        </div>
+    </div>
+
+    <script>
+        // Firebase config with your storage bucket
+        const firebaseConfig = {
+            apiKey: "AIzaSyBTE6Q6-OFOQRluocWaF-0F25Wlxn5j_Zo",
+            projectId: "qrcode-e4bd1",
+            storageBucket: "qrcode-e4bd1.firebasestorage.app"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+        const storageRef = storage.ref();
+
+        // DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const uploadZone = document.getElementById('uploadZone');
+        const preview = document.getElementById('preview');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const qrDiv = document.getElementById('qrcode');
+        const qrPlaceholder = document.getElementById('qrPlaceholder');
+        const statusDiv = document.getElementById('status');
+        const viewerContainer = document.getElementById('viewerContainer');
+        const viewerLink = document.getElementById('viewerLink');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const urlPreview = document.getElementById('urlPreview');
+
+        let currentQRCanvas = null;
+        let currentImageUrl = '';
+
+        function setStatus(msg, isError = false) {
+            statusDiv.textContent = msg;
+            statusDiv.style.color = isError ? '#dc2626' : '#4b5563';
+        }
+
+        function resetUI() {
+            preview.classList.add('hidden');
+            preview.src = '';
+            previewPlaceholder.classList.remove('hidden');
+            qrDiv.innerHTML = '';
+            qrPlaceholder.classList.remove('hidden');
+            viewerContainer.classList.add('hidden');
+            downloadBtn.classList.add('hidden');
+            urlPreview.classList.add('hidden');
+            currentQRCanvas = null;
+            currentImageUrl = '';
+        }
+
+        function showPreview(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                previewPlaceholder.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Download QR code function
+        window.downloadQR = function() {
+            if (!currentQRCanvas) return;
+            
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            
+            currentQRCanvas.toBlob((blob) => {
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }, 'image/png');
+        };
+
+        async function handleImageUpload(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                setStatus('please select an image', true);
+                return;
+            }
+
+            resetUI();
+            showPreview(file);
+            setStatus('uploading to storage...');
+
+            try {
+                // Create a unique filename
+                const timestamp = Date.now();
+                const fileName = `images/${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                const imageRef = storageRef.child(fileName);
+                
+                // Upload to Storage
+                const snapshot = await imageRef.put(file);
+                setStatus('getting download URL...');
+                
+                // Get the download URL (this is short and clean)
+                const downloadUrl = await snapshot.ref.getDownloadURL();
+                currentImageUrl = downloadUrl;
+                
+                // Show the short URL preview
+                urlPreview.textContent = downloadUrl.substring(0, 50) + '...';
+                urlPreview.classList.remove('hidden');
+                
+                setStatus('✓ uploaded, generating QR...');
+
+                // Generate QR code with the short URL
+                qrDiv.innerHTML = '';
+                
+                try {
+                    // Create QR code
+                    const qr = qrcode(0, 'M');
+                    qr.addData(downloadUrl);
+                    qr.make();
+                    
+                    // Create larger canvas for better quality
+                    const canvas = document.createElement('canvas');
+                    const size = 400;
+                    canvas.width = size;
+                    canvas.height = size;
+                    
+                    const ctx = canvas.getContext('2d');
+                    const cellSize = canvas.width / qr.getModuleCount();
+                    
+                    // White background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw black squares
+                    ctx.fillStyle = '#000000';
+                    ctx.imageSmoothingEnabled = false;
+                    
+                    for (let row = 0; row < qr.getModuleCount(); row++) {
+                        for (let col = 0; col < qr.getModuleCount(); col++) {
+                            if (qr.isDark(row, col)) {
+                                ctx.fillRect(
+                                    Math.floor(col * cellSize),
+                                    Math.floor(row * cellSize),
+                                    Math.ceil(cellSize),
+                                    Math.ceil(cellSize)
+                                );
+                            }
+                        }
+                    }
+                    
+                    // Store for download
+                    currentQRCanvas = canvas;
+                    
+                    // Create display version
+                    const displayCanvas = document.createElement('canvas');
+                    displayCanvas.width = 280;
+                    displayCanvas.height = 280;
+                    const displayCtx = displayCanvas.getContext('2d');
+                    displayCtx.imageSmoothingEnabled = false;
+                    displayCtx.drawImage(canvas, 0, 0, 280, 280);
+                    
+                    qrDiv.appendChild(displayCanvas);
+                    qrPlaceholder.classList.add('hidden');
+                    downloadBtn.classList.remove('hidden');
+                    
+                } catch (qrError) {
+                    console.log('QR error:', qrError);
+                    qrDiv.innerHTML = '<div style="padding:20px; font-size:14px; text-align:center;">Error generating QR</div>';
+                    qrPlaceholder.classList.add('hidden');
+                }
+
+                // Show direct image link (full-screen)
+                viewerLink.href = downloadUrl;
+                viewerContainer.classList.remove('hidden');
+                
+                setStatus('✅ ready! QR code points directly to image');
+
+            } catch (error) {
+                console.error('Error:', error);
+                setStatus('❌ error: ' + error.message, true);
+                resetUI();
+            }
+        }
+
+        // Event listeners
+        uploadZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleImageUpload(file);
+        });
+
+        // Drag and drop
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.style.background = '#f3f4f6';
+            uploadZone.style.borderColor = '#3b82f6';
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.style.background = '#f9fafb';
+            uploadZone.style.borderColor = '#d1d5db';
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.style.background = '#f9fafb';
+            uploadZone.style.borderColor = '#d1d5db';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            } else {
+                setStatus('please drop an image file', true);
+            }
+        });
+
+        setStatus('⬆️ upload an image');
+    </script>
+</body>
+</html>
