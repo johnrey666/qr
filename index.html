@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Storage QR · with download</title>
+    <title>Storage QR · images & PDFs</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
@@ -32,7 +32,32 @@
             font-weight: 500;
             font-size: 1.8rem;
             color: #111827;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
+        }
+        .file-type-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: #f3f4f6;
+            padding: 0.5rem;
+            border-radius: 40px;
+            width: fit-content;
+        }
+        .tab-btn {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            background: transparent;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .upload-area {
             background: #f9fafb;
@@ -51,6 +76,11 @@
         .upload-icon {
             font-size: 3.5rem;
             margin-bottom: 0.5rem;
+        }
+        .accepted-types {
+            color: #6b7280;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
         }
         #fileInput { display: none; }
         .flex-row {
@@ -76,6 +106,24 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+        }
+        .pdf-preview {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f87171;
+            color: white;
+            font-size: 3rem;
+        }
+        .pdf-preview span {
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            background: rgba(0,0,0,0.2);
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
         }
         .qr-section {
             display: flex;
@@ -165,22 +213,40 @@
             white-space: nowrap;
             margin-top: 0.5rem;
         }
+        .file-info {
+            font-size: 0.8rem;
+            color: #3b82f6;
+            background: #eff6ff;
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
+            margin-top: 0.5rem;
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>📸 Storage · QR</h2>
+        <h2>📸 Storage QR · any file</h2>
+        
+        <div class="file-type-tabs">
+            <button class="tab-btn active" id="imageTab" onclick="switchTab('image')">🖼️ Images</button>
+            <button class="tab-btn" id="pdfTab" onclick="switchTab('pdf')">📄 PDFs</button>
+        </div>
 
         <input type="file" id="fileInput" accept="image/*">
 
         <div class="upload-area" id="uploadZone">
-            <div class="upload-icon">🖼️</div>
-            <p style="color: #374151;">click or drag image here</p>
+            <div class="upload-icon" id="uploadIcon">🖼️</div>
+            <p style="color: #374151;" id="uploadText">click or drag image here</p>
+            <div class="accepted-types" id="acceptedTypes">JPG, PNG, GIF, WEBP</div>
         </div>
 
         <div class="flex-row">
-            <div class="preview-container">
+            <div class="preview-container" id="previewContainer">
                 <img id="preview" src="" alt="" class="hidden">
+                <div id="pdfPreview" class="pdf-preview hidden">
+                    <div>📄</div>
+                    <span id="pdfName"></span>
+                </div>
                 <span id="previewPlaceholder" class="placeholder-text">preview</span>
             </div>
             
@@ -193,13 +259,14 @@
                     ⬇️ Download QR Code
                 </button>
                 <div id="urlPreview" class="url-preview hidden"></div>
+                <div id="fileTypeInfo" class="file-info hidden"></div>
             </div>
         </div>
 
-        <div class="status" id="status">⬆️ upload an image</div>
+        <div class="status" id="status">⬆️ upload an image or PDF</div>
 
         <div id="viewerContainer" class="link-button hidden">
-            <a id="viewerLink" href="#" target="_blank">open full-screen image →</a>
+            <a id="viewerLink" href="#" target="_blank">open file →</a>
         </div>
 
         <div class="footnote">
@@ -223,7 +290,13 @@
         // DOM elements
         const fileInput = document.getElementById('fileInput');
         const uploadZone = document.getElementById('uploadZone');
+        const uploadIcon = document.getElementById('uploadIcon');
+        const uploadText = document.getElementById('uploadText');
+        const acceptedTypes = document.getElementById('acceptedTypes');
         const preview = document.getElementById('preview');
+        const pdfPreview = document.getElementById('pdfPreview');
+        const pdfName = document.getElementById('pdfName');
+        const previewContainer = document.getElementById('previewContainer');
         const previewPlaceholder = document.getElementById('previewPlaceholder');
         const qrDiv = document.getElementById('qrcode');
         const qrPlaceholder = document.getElementById('qrPlaceholder');
@@ -232,9 +305,36 @@
         const viewerLink = document.getElementById('viewerLink');
         const downloadBtn = document.getElementById('downloadBtn');
         const urlPreview = document.getElementById('urlPreview');
+        const fileTypeInfo = document.getElementById('fileTypeInfo');
 
         let currentQRCanvas = null;
-        let currentImageUrl = '';
+        let currentFileUrl = '';
+        let currentFileType = 'image';
+
+        // Tab switching
+        window.switchTab = function(type) {
+            currentFileType = type;
+            
+            // Update tab buttons
+            document.getElementById('imageTab').classList.remove('active');
+            document.getElementById('pdfTab').classList.remove('active');
+            document.getElementById(`${type}Tab`).classList.add('active');
+            
+            // Update upload area
+            if (type === 'image') {
+                uploadIcon.textContent = '🖼️';
+                uploadText.textContent = 'click or drag image here';
+                acceptedTypes.textContent = 'JPG, PNG, GIF, WEBP';
+                fileInput.accept = 'image/*';
+            } else {
+                uploadIcon.textContent = '📄';
+                uploadText.textContent = 'click or drag PDF here';
+                acceptedTypes.textContent = 'PDF';
+                fileInput.accept = '.pdf';
+            }
+            
+            resetUI();
+        };
 
         function setStatus(msg, isError = false) {
             statusDiv.textContent = msg;
@@ -243,25 +343,36 @@
 
         function resetUI() {
             preview.classList.add('hidden');
-            preview.src = '';
+            pdfPreview.classList.add('hidden');
             previewPlaceholder.classList.remove('hidden');
             qrDiv.innerHTML = '';
             qrPlaceholder.classList.remove('hidden');
             viewerContainer.classList.add('hidden');
             downloadBtn.classList.add('hidden');
             urlPreview.classList.add('hidden');
+            fileTypeInfo.classList.add('hidden');
             currentQRCanvas = null;
-            currentImageUrl = '';
+            currentFileUrl = '';
         }
 
         function showPreview(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                preview.src = e.target.result;
-                preview.classList.remove('hidden');
+            if (currentFileType === 'image' && file.type.startsWith('image/')) {
+                // Show image preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    pdfPreview.classList.add('hidden');
+                    previewPlaceholder.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else if (currentFileType === 'pdf' && file.type === 'application/pdf') {
+                // Show PDF preview
+                preview.classList.add('hidden');
+                pdfPreview.classList.remove('hidden');
+                pdfName.textContent = file.name.length > 20 ? file.name.substring(0, 20) + '...' : file.name;
                 previewPlaceholder.classList.add('hidden');
-            };
-            reader.readAsDataURL(file);
+            }
         }
 
         // Download QR code function
@@ -278,9 +389,14 @@
             }, 'image/png');
         };
 
-        async function handleImageUpload(file) {
-            if (!file || !file.type.startsWith('image/')) {
-                setStatus('please select an image', true);
+        async function handleFileUpload(file) {
+            // Validate file type
+            if (currentFileType === 'image' && !file.type.startsWith('image/')) {
+                setStatus('please select an image file', true);
+                return;
+            }
+            if (currentFileType === 'pdf' && file.type !== 'application/pdf') {
+                setStatus('please select a PDF file', true);
                 return;
             }
 
@@ -291,24 +407,29 @@
             try {
                 // Create a unique filename
                 const timestamp = Date.now();
-                const fileName = `images/${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-                const imageRef = storageRef.child(fileName);
+                const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+                const fileName = `files/${timestamp}_${cleanName}`;
+                const fileRef = storageRef.child(fileName);
                 
                 // Upload to Storage
-                const snapshot = await imageRef.put(file);
+                const snapshot = await fileRef.put(file);
                 setStatus('getting download URL...');
                 
-                // Get the download URL (this is short and clean)
+                // Get the download URL
                 const downloadUrl = await snapshot.ref.getDownloadURL();
-                currentImageUrl = downloadUrl;
+                currentFileUrl = downloadUrl;
                 
-                // Show the short URL preview
+                // Show file info
+                fileTypeInfo.textContent = file.type === 'application/pdf' ? '📄 PDF' : '🖼️ Image';
+                fileTypeInfo.classList.remove('hidden');
+                
+                // Show URL preview
                 urlPreview.textContent = downloadUrl.substring(0, 50) + '...';
                 urlPreview.classList.remove('hidden');
                 
                 setStatus('✓ uploaded, generating QR...');
 
-                // Generate QR code with the short URL
+                // Generate QR code with the URL
                 qrDiv.innerHTML = '';
                 
                 try {
@@ -368,11 +489,12 @@
                     qrPlaceholder.classList.add('hidden');
                 }
 
-                // Show direct image link (full-screen)
+                // Show direct file link
                 viewerLink.href = downloadUrl;
+                viewerLink.textContent = file.type === 'application/pdf' ? 'open PDF →' : 'open image →';
                 viewerContainer.classList.remove('hidden');
                 
-                setStatus('✅ ready! QR code points directly to image');
+                setStatus('✅ ready! scan QR to view file');
 
             } catch (error) {
                 console.error('Error:', error);
@@ -388,7 +510,7 @@
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) handleImageUpload(file);
+            if (file) handleFileUpload(file);
         });
 
         // Drag and drop
@@ -409,14 +531,21 @@
             uploadZone.style.borderColor = '#d1d5db';
             
             const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                handleImageUpload(file);
+            if (file) {
+                // Auto-detect file type
+                if (file.type.startsWith('image/')) {
+                    switchTab('image');
+                } else if (file.type === 'application/pdf') {
+                    switchTab('pdf');
+                }
+                handleFileUpload(file);
             } else {
-                setStatus('please drop an image file', true);
+                setStatus('please drop a valid file', true);
             }
         });
 
-        setStatus('⬆️ upload an image');
+        // Initialize
+        setStatus('⬆️ upload an image or PDF');
     </script>
 </body>
 </html>
