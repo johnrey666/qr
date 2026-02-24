@@ -2,292 +2,566 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Storage QR · images & PDFs <i>(Created by Pogi - John Rey Dado)</i></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>JRD · minimal QR · centered</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
-    <!-- QR library -->
+    <!-- QR generator & scanner -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ---------- variables ---------- */
+        :root {
+            --bg: #f2f5f9;
+            --surface: #ffffff;
+            --surface-soft: #f8fafd;
+            --text-main: #1e2b3c;
+            --text-mute: #546e7a;
+            --border: #dde3ed;
+            --accent: #2563eb;
+            --accent-soft: #e8f0fe;
+            --shadow: 0 8px 20px -12px rgba(0,32,64,0.15);
+            --qr-bg: #ffffff;
+            --qr-filter: none;
+            --placeholder-bg: #f0f4fa;
+        }
+        .dark {
+            --bg: #0f1728;
+            --surface: #1e2a3d;
+            --surface-soft: #26344b;
+            --text-main: #eef4fc;
+            --text-mute: #9bb1cc;
+            --border: #334155;
+            --accent: #4880ff;
+            --accent-soft: #1e3b5c;
+            --shadow: 0 8px 20px -8px #030613;
+            --qr-bg: #1e2a3d;        /* dark panel bg, not white */
+            --qr-filter: invert(1) hue-rotate(180deg);
+            --placeholder-bg: #1f2d42;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
         body {
-            background: #f5f7fa;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             min-height: 100vh;
-            padding: 1rem;
+            padding: 0.8rem;
+            transition: background 0.2s;
         }
         .card {
-            max-width: 800px;
+            max-width: 560px;
             width: 100%;
-            background: white;
-            border-radius: 32px;
-            padding: 2rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            background: var(--surface);
+            border-radius: 2rem;
+            padding: 1.2rem 1.2rem 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: background 0.2s, border 0.2s;
         }
-        h2 {
-            font-weight: 500;
-            font-size: 1.8rem;
-            color: #111827;
-            margin-bottom: 1rem;
-        }
-        .file-type-tabs {
+
+        /* header minimal */
+        .header {
             display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            background: #f3f4f6;
-            padding: 0.5rem;
-            border-radius: 40px;
-            width: fit-content;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.2rem;
+            flex-wrap: wrap;
+            gap: 0.6rem;
         }
-        .tab-btn {
-            padding: 0.5rem 1.5rem;
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .brand i {
+            font-size: 1.8rem;
+            color: var(--accent);
+        }
+        .brand h1 {
+            font-weight: 620;
+            font-size: 1.5rem;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+        .signature {
+            background: var(--surface-soft);
+            padding: 0.3rem 1rem;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            color: var(--text-mute);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            white-space: nowrap;
+        }
+        .signature i { color: #f5b342; font-size: 0.7rem; }
+        .signature strong { color: var(--accent); font-weight: 600; }
+
+        .theme-toggle {
+            background: var(--surface-soft);
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            padding: 0.2rem;
+            display: flex;
+            gap: 0.2rem;
+        }
+        .theme-toggle button {
+            background: transparent;
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--text-mute);
+            display: flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+        .theme-toggle button.active-theme {
+            background: var(--surface);
+            color: var(--accent);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+        .dark .theme-toggle button.active-theme { background: #2a3a52; color: white; }
+
+        /* tab row */
+        .tab-row {
+            display: flex;
+            gap: 0.3rem;
+            background: var(--surface-soft);
+            padding: 0.25rem;
+            border-radius: 3rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+            white-space: nowrap;
+        }
+        .tab-row::-webkit-scrollbar { display: none; }
+        .tab {
+            padding: 0.5rem 1.2rem;
             border: none;
             background: transparent;
-            border-radius: 30px;
-            font-size: 0.95rem;
+            border-radius: 3rem;
+            font-size: 0.85rem;
+            font-weight: 530;
+            cursor: pointer;
+            color: var(--text-mute);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-shrink: 0;
+        }
+        .tab i { font-size: 0.9rem; }
+        .tab.active {
+            background: var(--surface);
+            color: var(--accent);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            border: 1px solid var(--border);
+        }
+
+        /* inner tabs */
+        .inner-tabs {
+            display: flex;
+            gap: 0.3rem;
+            background: var(--surface-soft);
+            padding: 0.2rem;
+            border-radius: 2.5rem;
+            width: fit-content;
+            margin-bottom: 1.2rem;
+            border: 1px solid var(--border);
+        }
+        .inner-tab {
+            padding: 0.35rem 1rem;
+            border: none;
+            background: transparent;
+            border-radius: 2rem;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
-            color: #6b7280;
-            transition: all 0.2s;
+            color: var(--text-mute);
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
         }
-        .tab-btn.active {
-            background: white;
-            color: #3b82f6;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        .inner-tab.active {
+            background: var(--surface);
+            color: var(--accent);
+            border: 1px solid var(--border);
         }
+
+        /* upload area */
         .upload-area {
-            background: #f9fafb;
-            border: 2px dashed #d1d5db;
-            border-radius: 20px;
-            padding: 2.5rem;
+            background: var(--surface-soft);
+            border: 1.5px dashed var(--border);
+            border-radius: 1.5rem;
+            padding: 1.5rem 1rem;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s;
-            margin-bottom: 2rem;
+            transition: all 0.15s;
+            margin-bottom: 1.5rem;
         }
-        .upload-area:hover {
-            border-color: #3b82f6;
-            background: #f3f4f6;
-        }
-        .upload-icon {
-            font-size: 3.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .accepted-types {
-            color: #6b7280;
-            font-size: 0.8rem;
-            margin-top: 0.5rem;
-        }
-        #fileInput { display: none; }
-        .flex-row {
+        .upload-area:hover { border-color: var(--accent); background: var(--accent-soft); }
+        .upload-icon { font-size: 2.5rem; line-height: 1; }
+        .upload-title { font-size: 0.95rem; font-weight: 550; color: var(--text-main); margin-top: 0.2rem; }
+        .upload-hint { color: var(--text-mute); font-size: 0.7rem; margin-top: 0.25rem; }
+
+        /* dual panel */
+        .dual-panel {
             display: flex;
-            gap: 3rem;
-            justify-content: center;
-            align-items: center;
-            margin: 2rem 0;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 1.2rem;
+            margin: 1.5rem 0 1rem;
         }
-        .preview-container {
-            width: 250px;
-            height: 250px;
-            background: #f3f4f6;
-            border-radius: 16px;
+        @media (min-width: 480px) {
+            .dual-panel { flex-direction: row; align-items: center; }
+        }
+        .preview-card, .qr-card {
+            background: var(--surface-soft);
+            border-radius: 1.5rem;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .card-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-mute);
+            margin-bottom: 0.6rem;
+            align-self: flex-start;
+        }
+        .preview-box {
+            width: 160px;
+            height: 160px;
+            background: var(--surface);
+            border-radius: 1.2rem;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            border: 1px solid #e5e7eb;
+            border: 1px solid var(--border);
+            margin-bottom: 0.5rem;
         }
-        .preview-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .pdf-preview {
+        .preview-box img { width: 100%; height: 100%; object-fit: cover; }
+        .pdf-badge {
             width: 100%;
             height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: #f87171;
+            background: #b91c1c;
             color: white;
-            font-size: 3rem;
+            font-size: 2.5rem;
+            border-radius: 1.2rem;
         }
-        .pdf-preview span {
-            font-size: 1rem;
-            margin-top: 0.5rem;
-            background: rgba(0,0,0,0.2);
-            padding: 0.25rem 1rem;
-            border-radius: 20px;
-        }
-        .qr-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 1rem;
-        }
-        .qr-container {
-            width: 300px;
-            height: 300px;
-            background: white;
-            border-radius: 16px;
+        .pdf-badge span { font-size: 0.7rem; background: #7f1d1d; padding: 0.2rem 0.8rem; border-radius: 2rem; margin-top: 0.3rem; }
+
+        /* ----- FIX: QR box always centered, placeholder with bg and proper alignment ----- */
+        .qr-box {
+            width: 160px;
+            height: 160px;
+            background: var(--qr-bg);        /* dynamic: dark in dark mode, light in light */
+            border-radius: 1.2rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid #e5e7eb;
-            padding: 10px;
+            border: 1px solid var(--border);
+            padding: 0;
+            margin-bottom: 0.5rem;
+            position: relative;
         }
-        #qrcode {
-            width: 280px;
-            height: 280px;
-        }
-        #qrcode canvas {
+        #qrcode, #linkQR {
+            display: flex;
+            align-items: center;
+            justify-content: center;
             width: 100%;
             height: 100%;
         }
-        .download-btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 40px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
+        #qrcode canvas, #linkQR canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            filter: var(--qr-filter);
+            display: block;
+        }
+        /* placeholder itself centered, with background matching panel */
+        .placeholder-text {
+            color: var(--text-mute);
+            font-size: 0.75rem;
+            background: var(--placeholder-bg);
+            padding: 0.3rem 0.8rem;
+            border-radius: 3rem;
             display: inline-flex;
             align-items: center;
+            gap: 0.3rem;
+            border: 1px solid var(--border);
+        }
+        /* ensure qr container centers its content */
+        .qr-box .placeholder-text {
+            margin: 0; 
+            position: absolute;
+        }
+
+        .btn-group {
+            display: flex;
             gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 0.3rem 0;
         }
-        .download-btn:hover {
-            background: #2563eb;
-        }
-        .download-btn:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-        }
-        .hidden { display: none !important; }
-        .status {
-            text-align: center;
-            color: #4b5563;
-            margin: 1.5rem 0;
-            padding: 0.75rem;
-            background: #f3f4f6;
-            border-radius: 40px;
-            font-size: 1rem;
-        }
-        .link-button {
-            text-align: center;
-            margin: 1rem 0;
-        }
-        .link-button a {
-            color: #3b82f6;
-            text-decoration: none;
-            font-weight: 500;
-            padding: 0.75rem 1.5rem;
-            background: #eff6ff;
-            border-radius: 40px;
-            display: inline-block;
-        }
-        .footnote {
-            text-align: center;
-            color: #6b7280;
+        .primary-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.4rem 1.2rem;
+            border-radius: 2rem;
+            font-weight: 550;
             font-size: 0.8rem;
-            margin-top: 1.5rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1px solid var(--accent);
         }
-        .placeholder-text {
-            color: #9ca3af;
-            font-size: 0.9rem;
+        .secondary-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            padding: 0.4rem 1.2rem;
+            border-radius: 2rem;
+            font-weight: 500;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--text-main);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .status {
+            background: var(--surface-soft);
+            padding: 0.6rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.8rem;
+            color: var(--text-mute);
+            text-align: center;
+            margin: 0.8rem 0 0;
+            border: 1px solid var(--border);
+        }
+        .link-chip { text-align: center; margin: 0.8rem 0 0; }
+        .link-chip a {
+            background: var(--accent-soft);
+            color: var(--accent);
+            padding: 0.4rem 1.2rem;
+            border-radius: 2rem;
+            text-decoration: none;
+            font-size: 0.8rem;
+            display: inline-block;
+            border: 1px solid var(--border);
         }
         .url-preview {
-            font-size: 0.7rem;
-            color: #6b7280;
-            max-width: 280px;
+            font-size: 0.6rem;
+            background: var(--surface);
+            padding: 0.2rem 0.8rem;
+            border-radius: 2rem;
+            color: var(--text-mute);
+            max-width: 180px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            margin-top: 0.5rem;
         }
-        .file-info {
-            font-size: 0.8rem;
-            color: #3b82f6;
-            background: #eff6ff;
-            padding: 0.25rem 1rem;
-            border-radius: 20px;
-            margin-top: 0.5rem;
+        .file-badge {
+            background: var(--accent-soft);
+            padding: 0.15rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            color: var(--accent);
         }
+
+        /* scanner minimal */
+        .scanner-panel {
+            background: var(--surface-soft);
+            border-radius: 1.5rem;
+            padding: 1.2rem;
+            border: 1px solid var(--border);
+        }
+        #reader {
+            width: 100%;
+            max-width: 360px;
+            margin: 0.8rem auto;
+            border-radius: 1.2rem;
+            overflow: hidden;
+            background: #0f1728;
+            border: 1px solid var(--border);
+        }
+        .scan-result {
+            background: #1a3330;
+            color: #b0e0c0;
+            padding: 0.6rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            word-break: break-all;
+            text-align: center;
+        }
+        .footnote {
+            text-align: center;
+            color: var(--text-mute);
+            font-size: 0.6rem;
+            margin-top: 1.2rem;
+            border-top: 1px dashed var(--border);
+            padding-top: 0.8rem;
+        }
+        .hidden { display: none !important; }
+        input {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            outline: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 2rem;
+            width: 100%;
+            font-size: 0.85rem;
+        }
+        input::placeholder { color: var(--text-mute); }
+        #fileInput { display: none; }
     </style>
 </head>
-<body>
-    <div class="card">
-        <h2>F.O QR · any file <i>(Created by Pogi - John Rey Dado)</i></h2>
-        
-        <div class="file-type-tabs">
-            <button class="tab-btn active" id="imageTab" onclick="switchTab('image')">🖼️ Images</button>
-            <button class="tab-btn" id="pdfTab" onclick="switchTab('pdf')">📄 PDFs</button>
+<body class="dark">
+<div class="card">
+    <!-- header -->
+    <div class="header">
+        <div class="brand">
+            <i class="fas fa-qrcode"></i>
+            <h1>IDK</h1>
         </div>
-
-        <input type="file" id="fileInput" accept="image/*">
-
-        <div class="upload-area" id="uploadZone">
-            <div class="upload-icon" id="uploadIcon">🖼️</div>
-            <p style="color: #374151;" id="uploadText">click or drag image here</p>
-            <div class="accepted-types" id="acceptedTypes">JPG, PNG, GIF, WEBP</div>
-        </div>
-
-        <div class="flex-row">
-            <div class="preview-container" id="previewContainer">
-                <img id="preview" src="" alt="" class="hidden">
-                <div id="pdfPreview" class="pdf-preview hidden">
-                    <div>📄</div>
-                    <span id="pdfName"></span>
-                </div>
-                <span id="previewPlaceholder" class="placeholder-text">preview</span>
+        <div style="display: flex; gap:0.4rem; align-items:center;">
+            <span class="signature"><i class="fas fa-crown"></i> John Rey <strong>POGI</strong> Dado</span>
+            <div class="theme-toggle">
+                <button id="lightThemeBtn" onclick="setTheme('light')"><i class="fas fa-sun"></i></button>
+                <button id="darkThemeBtn" class="active-theme" onclick="setTheme('dark')"><i class="fas fa-moon"></i></button>
             </div>
-            
-            <div class="qr-section">
-                <div class="qr-container">
-                    <div id="qrcode"></div>
-                    <span id="qrPlaceholder" class="placeholder-text">qr code will appear here</span>
-                </div>
-                <button id="downloadBtn" class="download-btn hidden" onclick="downloadQR()">
-                    ⬇️ Download QR Code
-                </button>
-                <div id="urlPreview" class="url-preview hidden"></div>
-                <div id="fileTypeInfo" class="file-info hidden"></div>
-            </div>
-        </div>
-
-        <div class="status" id="status">⬆️ upload an image or PDF</div>
-
-        <div id="viewerContainer" class="link-button hidden">
-            <a id="viewerLink" href="#" target="_blank">open file →</a>
-        </div>
-
-        <div class="footnote">
-            bucket: qrcode-e4bd1.firebasestorage.app
         </div>
     </div>
 
-    <script>
-        // Firebase config with your storage bucket
+    <!-- main tabs -->
+    <div class="tab-row">
+        <button class="tab active" id="fileModeTab" onclick="setMode('file')"><i class="fas fa-cloud-upload-alt"></i> File</button>
+        <button class="tab" id="linkModeTab" onclick="setMode('link')"><i class="fas fa-link"></i> Link</button>
+        <button class="tab" id="scanModeTab" onclick="initScannerTab()"><i class="fas fa-camera"></i> Scan</button>
+    </div>
+
+    <!-- FILE MODE -->
+    <div id="fileModePanel">
+        <div class="inner-tabs">
+            <button class="inner-tab active" id="imageSubTab" onclick="switchFileType('image')"><i class="fas fa-image"></i> Image</button>
+            <button class="inner-tab" id="pdfSubTab" onclick="switchFileType('pdf')"><i class="fas fa-file-pdf"></i> PDF</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*">
+        <div class="upload-area" id="uploadZone">
+            <div class="upload-icon" id="uploadIcon">🖼️</div>
+            <div class="upload-title" id="uploadText">click or drag</div>
+            <div class="upload-hint" id="acceptedTypes">JPG, PNG, GIF, WEBP</div>
+        </div>
+
+        <div class="dual-panel">
+            <!-- preview -->
+            <div class="preview-card">
+                <div class="card-label"><i class="far fa-eye"></i> preview</div>
+                <div class="preview-box" id="previewContainer">
+                    <img id="preview" src="" alt="" class="hidden">
+                    <div id="pdfPreview" class="pdf-badge hidden">
+                        <i class="fas fa-file-pdf"></i>
+                        <span id="pdfName"></span>
+                    </div>
+                    <span id="previewPlaceholder" class="placeholder-text"><i class="far fa-image"></i> none</span>
+                </div>
+                <div id="fileTypeInfo" class="file-badge hidden"></div>
+            </div>
+            <!-- QR card with centered placeholder -->
+            <div class="qr-card">
+                <div class="card-label"><i class="fas fa-qrcode"></i> qr</div>
+                <div class="qr-box">
+                    <div id="qrcode"></div>
+                    <span id="qrPlaceholder" class="placeholder-text"><i class="fas fa-qrcode"></i> waiting</span>
+                </div>
+                <div class="btn-group">
+                    <button id="downloadBtn" class="primary-btn hidden" onclick="downloadQR()"><i class="fas fa-download"></i> QR</button>
+                </div>
+                <div id="urlPreview" class="url-preview hidden"></div>
+            </div>
+        </div>
+        <div class="status" id="status"><i class="far fa-hourglass"></i> upload image or PDF</div>
+        <div id="viewerContainer" class="link-chip hidden">
+            <a id="viewerLink" href="#" target="_blank"><i class="fas fa-external-link-alt"></i> open file</a>
+        </div>
+    </div>
+
+    <!-- LINK MODE -->
+    <div id="linkModePanel" class="hidden">
+        <div style="margin: 1rem 0;">
+            <input type="url" id="linkInput" placeholder="https://example.com">
+        </div>
+        <div class="dual-panel" style="gap:1rem;">
+            <div class="qr-card" style="width:100%;">
+                <div class="qr-box" style="margin:0 auto;">
+                    <div id="linkQR"></div>
+                    <span id="linkQrPlaceholder" class="placeholder-text"><i class="fas fa-link"></i> link qr</span>
+                </div>
+                <div class="btn-group">
+                    <button class="primary-btn" onclick="generateLinkQR()"><i class="fas fa-magic"></i> Generate</button>
+                    <button id="downloadLinkBtn" class="secondary-btn hidden" onclick="downloadLinkQR()"><i class="fas fa-download"></i> Save</button>
+                </div>
+                <div id="linkUrlPreview" class="url-preview hidden"></div>
+            </div>
+        </div>
+        <div class="status" id="linkStatus"><i class="fas fa-link"></i> enter link and generate</div>
+    </div>
+
+    <!-- SCANNER MODE -->
+    <div id="scannerModePanel" class="hidden scanner-panel">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-weight: 500; color: var(--text-main);"><i class="fas fa-camera"></i> scan</span>
+            <button class="secondary-btn" id="stopScannerBtn" onclick="stopScanner()" style="padding:0.3rem 0.9rem;"><i class="fas fa-stop"></i> stop</button>
+        </div>
+        <div id="reader"></div>
+        <div id="scanResult" class="scan-result hidden"></div>
+        <div class="status" id="scannerStatus" style="margin-top:0.8rem;">📷 camera idle</div>
+        <button class="primary-btn" id="startScannerBtn" onclick="startScanner()" style="width:100%; margin-top:0.5rem;"><i class="fas fa-play"></i> start</button>
+    </div>
+
+    <div class="footnote">
+        <i class="fas fa-database"></i> firebase · <i class="fas fa-palette"></i> centered
+    </div>
+</div>
+
+<script>
+    (function() {
         const firebaseConfig = {
             apiKey: "AIzaSyBTE6Q6-OFOQRluocWaF-0F25Wlxn5j_Zo",
             projectId: "qrcode-e4bd1",
             storageBucket: "qrcode-e4bd1.firebasestorage.app"
         };
-
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const storage = firebase.storage();
         const storageRef = storage.ref();
 
-        // DOM elements
+        // DOM
+        const fileModePanel = document.getElementById('fileModePanel');
+        const linkModePanel = document.getElementById('linkModePanel');
+        const scannerModePanel = document.getElementById('scannerModePanel');
+        const fileModeTab = document.getElementById('fileModeTab');
+        const linkModeTab = document.getElementById('linkModeTab');
+        const scanModeTab = document.getElementById('scanModeTab');
+
         const fileInput = document.getElementById('fileInput');
         const uploadZone = document.getElementById('uploadZone');
         const uploadIcon = document.getElementById('uploadIcon');
@@ -296,7 +570,6 @@
         const preview = document.getElementById('preview');
         const pdfPreview = document.getElementById('pdfPreview');
         const pdfName = document.getElementById('pdfName');
-        const previewContainer = document.getElementById('previewContainer');
         const previewPlaceholder = document.getElementById('previewPlaceholder');
         const qrDiv = document.getElementById('qrcode');
         const qrPlaceholder = document.getElementById('qrPlaceholder');
@@ -306,42 +579,82 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const urlPreview = document.getElementById('urlPreview');
         const fileTypeInfo = document.getElementById('fileTypeInfo');
+        const imageSubTab = document.getElementById('imageSubTab');
+        const pdfSubTab = document.getElementById('pdfSubTab');
 
+        const linkInput = document.getElementById('linkInput');
+        const linkQRDiv = document.getElementById('linkQR');
+        const linkQrPlaceholder = document.getElementById('linkQrPlaceholder');
+        const downloadLinkBtn = document.getElementById('downloadLinkBtn');
+        const linkUrlPreview = document.getElementById('linkUrlPreview');
+        const linkStatus = document.getElementById('linkStatus');
+
+        let html5QrCode = null;
+        const scanResultDiv = document.getElementById('scanResult');
+        const scannerStatus = document.getElementById('scannerStatus');
+
+        let currentFileType = 'image';
         let currentQRCanvas = null;
         let currentFileUrl = '';
-        let currentFileType = 'image';
+        let linkQRCanvas = null;
 
-        // Tab switching
-        window.switchTab = function(type) {
+        // theme
+        window.setTheme = function(theme) {
+            const body = document.body;
+            const lightBtn = document.getElementById('lightThemeBtn');
+            const darkBtn = document.getElementById('darkThemeBtn');
+            if (theme === 'light') {
+                body.classList.remove('dark');
+                lightBtn.classList.add('active-theme');
+                darkBtn.classList.remove('active-theme');
+            } else {
+                body.classList.add('dark');
+                darkBtn.classList.add('active-theme');
+                lightBtn.classList.remove('active-theme');
+            }
+        };
+
+        window.setMode = function(mode) {
+            fileModeTab.classList.remove('active');
+            linkModeTab.classList.remove('active');
+            scanModeTab.classList.remove('active');
+            fileModePanel.classList.add('hidden');
+            linkModePanel.classList.add('hidden');
+            scannerModePanel.classList.add('hidden');
+            if (mode === 'file') {
+                fileModeTab.classList.add('active');
+                fileModePanel.classList.remove('hidden');
+            } else if (mode === 'link') {
+                linkModeTab.classList.add('active');
+                linkModePanel.classList.remove('hidden');
+            } else if (mode === 'scan') {
+                scanModeTab.classList.add('active');
+                scannerModePanel.classList.remove('hidden');
+            }
+            if (mode !== 'scan') stopScanner();
+        };
+
+        window.switchFileType = function(type) {
             currentFileType = type;
-            
-            // Update tab buttons
-            document.getElementById('imageTab').classList.remove('active');
-            document.getElementById('pdfTab').classList.remove('active');
-            document.getElementById(`${type}Tab`).classList.add('active');
-            
-            // Update upload area
             if (type === 'image') {
+                imageSubTab.classList.add('active');
+                pdfSubTab.classList.remove('active');
                 uploadIcon.textContent = '🖼️';
-                uploadText.textContent = 'click or drag image here';
+                uploadText.textContent = 'click or drag';
                 acceptedTypes.textContent = 'JPG, PNG, GIF, WEBP';
                 fileInput.accept = 'image/*';
             } else {
+                imageSubTab.classList.remove('active');
+                pdfSubTab.classList.add('active');
                 uploadIcon.textContent = '📄';
-                uploadText.textContent = 'click or drag PDF here';
+                uploadText.textContent = 'click or drag';
                 acceptedTypes.textContent = 'PDF';
                 fileInput.accept = '.pdf';
             }
-            
-            resetUI();
+            resetFileUI();
         };
 
-        function setStatus(msg, isError = false) {
-            statusDiv.textContent = msg;
-            statusDiv.style.color = isError ? '#dc2626' : '#4b5563';
-        }
-
-        function resetUI() {
+        function resetFileUI() {
             preview.classList.add('hidden');
             pdfPreview.classList.add('hidden');
             previewPlaceholder.classList.remove('hidden');
@@ -355,9 +668,8 @@
             currentFileUrl = '';
         }
 
-        function showPreview(file) {
+        function showFilePreview(file) {
             if (currentFileType === 'image' && file.type.startsWith('image/')) {
-                // Show image preview
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     preview.src = e.target.result;
@@ -367,185 +679,170 @@
                 };
                 reader.readAsDataURL(file);
             } else if (currentFileType === 'pdf' && file.type === 'application/pdf') {
-                // Show PDF preview
                 preview.classList.add('hidden');
                 pdfPreview.classList.remove('hidden');
-                pdfName.textContent = file.name.length > 20 ? file.name.substring(0, 20) + '...' : file.name;
+                pdfName.textContent = file.name.length > 16 ? file.name.substring(0,12)+'…' : file.name;
                 previewPlaceholder.classList.add('hidden');
             }
         }
 
-        // Download QR code function
-        window.downloadQR = function() {
-            if (!currentQRCanvas) return;
-            
-            const link = document.createElement('a');
-            link.download = 'qrcode.png';
-            
-            currentQRCanvas.toBlob((blob) => {
-                link.href = URL.createObjectURL(blob);
-                link.click();
-                URL.revokeObjectURL(link.href);
-            }, 'image/png');
-        };
-
         async function handleFileUpload(file) {
-            // Validate file type
             if (currentFileType === 'image' && !file.type.startsWith('image/')) {
-                setStatus('please select an image file', true);
-                return;
+                statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> select image'; return;
             }
             if (currentFileType === 'pdf' && file.type !== 'application/pdf') {
-                setStatus('please select a PDF file', true);
-                return;
+                statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> select PDF'; return;
             }
-
-            resetUI();
-            showPreview(file);
-            setStatus('uploading to storage...');
+            resetFileUI();
+            showFilePreview(file);
+            statusDiv.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> uploading ...';
 
             try {
-                // Create a unique filename
                 const timestamp = Date.now();
                 const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
                 const fileName = `files/${timestamp}_${cleanName}`;
                 const fileRef = storageRef.child(fileName);
-                
-                // Upload to Storage
                 const snapshot = await fileRef.put(file);
-                setStatus('getting download URL...');
-                
-                // Get the download URL
+                statusDiv.innerHTML = '<i class="fas fa-link"></i> getting URL ...';
                 const downloadUrl = await snapshot.ref.getDownloadURL();
                 currentFileUrl = downloadUrl;
-                
-                // Show file info
-                fileTypeInfo.textContent = file.type === 'application/pdf' ? '📄 PDF' : '🖼️ Image';
+
+                fileTypeInfo.textContent = file.type==='application/pdf'? '📄 PDF' : '🖼️ Image';
                 fileTypeInfo.classList.remove('hidden');
-                
-                // Show URL preview
-                urlPreview.textContent = downloadUrl.substring(0, 50) + '...';
+                urlPreview.textContent = downloadUrl.substring(0,35)+'…';
                 urlPreview.classList.remove('hidden');
-                
-                setStatus('✓ uploaded, generating QR...');
 
-                // Generate QR code with the URL
-                qrDiv.innerHTML = '';
-                
-                try {
-                    // Create QR code
-                    const qr = qrcode(0, 'M');
-                    qr.addData(downloadUrl);
-                    qr.make();
-                    
-                    // Create larger canvas for better quality
-                    const canvas = document.createElement('canvas');
-                    const size = 400;
-                    canvas.width = size;
-                    canvas.height = size;
-                    
-                    const ctx = canvas.getContext('2d');
-                    const cellSize = canvas.width / qr.getModuleCount();
-                    
-                    // White background
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw black squares
-                    ctx.fillStyle = '#000000';
-                    ctx.imageSmoothingEnabled = false;
-                    
-                    for (let row = 0; row < qr.getModuleCount(); row++) {
-                        for (let col = 0; col < qr.getModuleCount(); col++) {
-                            if (qr.isDark(row, col)) {
-                                ctx.fillRect(
-                                    Math.floor(col * cellSize),
-                                    Math.floor(row * cellSize),
-                                    Math.ceil(cellSize),
-                                    Math.ceil(cellSize)
-                                );
-                            }
-                        }
+                statusDiv.innerHTML = '<i class="fas fa-qrcode"></i> generating QR ...';
+                const qr = qrcode(0, 'M');
+                qr.addData(downloadUrl);
+                qr.make();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 300; canvas.height = 300;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff'; ctx.fillRect(0,0,300,300);
+                ctx.fillStyle = '#000';
+                const cell = 300 / qr.getModuleCount();
+                for (let r=0; r<qr.getModuleCount(); r++) {
+                    for (let c=0; c<qr.getModuleCount(); c++) {
+                        if(qr.isDark(r,c)) ctx.fillRect(c*cell, r*cell, Math.ceil(cell), Math.ceil(cell));
                     }
-                    
-                    // Store for download
-                    currentQRCanvas = canvas;
-                    
-                    // Create display version
-                    const displayCanvas = document.createElement('canvas');
-                    displayCanvas.width = 280;
-                    displayCanvas.height = 280;
-                    const displayCtx = displayCanvas.getContext('2d');
-                    displayCtx.imageSmoothingEnabled = false;
-                    displayCtx.drawImage(canvas, 0, 0, 280, 280);
-                    
-                    qrDiv.appendChild(displayCanvas);
-                    qrPlaceholder.classList.add('hidden');
-                    downloadBtn.classList.remove('hidden');
-                    
-                } catch (qrError) {
-                    console.log('QR error:', qrError);
-                    qrDiv.innerHTML = '<div style="padding:20px; font-size:14px; text-align:center;">Error generating QR</div>';
-                    qrPlaceholder.classList.add('hidden');
                 }
+                currentQRCanvas = canvas;
 
-                // Show direct file link
+                const dispCanvas = document.createElement('canvas');
+                dispCanvas.width = 140; dispCanvas.height = 140;
+                dispCanvas.getContext('2d').drawImage(canvas,0,0,140,140);
+                qrDiv.innerHTML = '';
+                qrDiv.appendChild(dispCanvas);
+                qrPlaceholder.classList.add('hidden');
+                downloadBtn.classList.remove('hidden');
+
                 viewerLink.href = downloadUrl;
-                viewerLink.textContent = file.type === 'application/pdf' ? 'open PDF →' : 'open image →';
+                viewerLink.innerHTML = (file.type==='application/pdf'? '<i class="fas fa-file-pdf"></i> open PDF' : '<i class="fas fa-image"></i> open image');
                 viewerContainer.classList.remove('hidden');
-                
-                setStatus('✅ ready! scan QR to view file');
-
-            } catch (error) {
-                console.error('Error:', error);
-                setStatus('❌ error: ' + error.message, true);
-                resetUI();
+                statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> ready';
+            } catch (err) {
+                statusDiv.innerHTML = '<i class="fas fa-circle-exclamation"></i> error';
             }
         }
 
-        // Event listeners
-        uploadZone.addEventListener('click', () => {
-            fileInput.click();
-        });
+        window.downloadQR = function() {
+            if (!currentQRCanvas) return;
+            const link = document.createElement('a');
+            link.download = 'jrd-qr.png';
+            currentQRCanvas.toBlob(blob => {
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+            });
+        };
 
+        window.generateLinkQR = function() {
+            const url = linkInput.value.trim();
+            if (!url) { linkStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> enter link'; return; }
+            try { new URL(url); } catch (e) { linkStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> invalid'; return; }
+
+            linkQRDiv.innerHTML = '';
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 300; canvas.height = 300;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0,0,300,300);
+            ctx.fillStyle = '#000';
+            const cell = 300 / qr.getModuleCount();
+            for (let r=0; r<qr.getModuleCount(); r++) {
+                for (let c=0; c<qr.getModuleCount(); c++) {
+                    if(qr.isDark(r,c)) ctx.fillRect(c*cell, r*cell, Math.ceil(cell), Math.ceil(cell));
+                }
+            }
+            linkQRCanvas = canvas;
+            const disp = document.createElement('canvas');
+            disp.width = 140; disp.height = 140;
+            disp.getContext('2d').drawImage(canvas,0,0,140,140);
+            linkQRDiv.appendChild(disp);
+            linkQrPlaceholder.classList.add('hidden');
+            downloadLinkBtn.classList.remove('hidden');
+            linkUrlPreview.textContent = url.substring(0,30)+'…';
+            linkUrlPreview.classList.remove('hidden');
+            linkStatus.innerHTML = '<i class="fas fa-check-circle"></i> QR ready';
+        };
+
+        window.downloadLinkQR = function() {
+            if (!linkQRCanvas) return;
+            const link = document.createElement('a');
+            link.download = 'jrd-link.png';
+            linkQRCanvas.toBlob(blob => {
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+            });
+        };
+
+        window.initScannerTab = function() { setMode('scan'); };
+        window.startScanner = function() {
+            if (html5QrCode) { html5QrCode.stop().catch(()=>{}); }
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 8, qrbox: { width: 200, height: 200 } };
+            scannerStatus.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> starting...';
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, ()=>{})
+            .then(() => { scannerStatus.innerHTML = '<i class="fas fa-video"></i> active'; })
+            .catch(() => { scannerStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> camera error'; });
+        };
+        function onScanSuccess(decodedText) {
+            scanResultDiv.classList.remove('hidden');
+            scanResultDiv.innerHTML = `<i class="fas fa-check-circle"></i> <a href="${decodedText}" target="_blank" style="color:#a5c9ff;">${decodedText.substring(0,40)}</a>`;
+            scannerStatus.innerHTML = '✅ detected';
+        }
+        window.stopScanner = function() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => { scannerStatus.innerHTML = '⏹️ stopped'; }).catch(()=>{});
+                html5QrCode = null;
+            }
+            scanResultDiv.classList.add('hidden');
+        };
+
+        uploadZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleFileUpload(file);
+            if (e.target.files[0]) handleFileUpload(e.target.files[0]);
         });
-
-        // Drag and drop
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.style.background = '#f3f4f6';
-            uploadZone.style.borderColor = '#3b82f6';
-        });
-
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.style.background = '#f9fafb';
-            uploadZone.style.borderColor = '#d1d5db';
-        });
-
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadZone.style.background = '#f9fafb';
-            uploadZone.style.borderColor = '#d1d5db';
-            
             const file = e.dataTransfer.files[0];
             if (file) {
-                // Auto-detect file type
-                if (file.type.startsWith('image/')) {
-                    switchTab('image');
-                } else if (file.type === 'application/pdf') {
-                    switchTab('pdf');
-                }
+                if (file.type.startsWith('image/')) switchFileType('image');
+                else if (file.type === 'application/pdf') switchFileType('pdf');
                 handleFileUpload(file);
-            } else {
-                setStatus('please drop a valid file', true);
             }
         });
+        uploadZone.addEventListener('dragover', (e) => e.preventDefault());
 
-        // Initialize
-        setStatus('⬆️ upload an image or PDF');
-    </script>
+        setMode('file');
+        window.switchFileType = switchFileType;
+    })();
+</script>
 </body>
 </html>
